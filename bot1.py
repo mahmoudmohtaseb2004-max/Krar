@@ -132,7 +132,7 @@ async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_T
             # ستيكر وفيديو دائري ما يقبل تعديل، نبعت رسالة صغيرة بالأزرار فقط
             await context.bot.send_message(
                 chat_id=ADMIN_GROUP_ID,
-                text=" ",
+                text="👆",
                 reply_markup=keyboard
             )
 
@@ -143,7 +143,6 @@ async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_T
 
     except Exception as e:
         logger.error(f"❌ خطأ: {e}", exc_info=True)
-        await update.message.reply_text(f"❌ حدث خطأ: {e}")
 
 
 # ==================== ردود المشرفين ====================
@@ -220,7 +219,7 @@ async def handle_group_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("✅ تم إرسال الرد!")
 
     except Exception as e:
-        await update.message.reply_text(f"❌ حدث خطأ: {str(e)}")
+        logger.error(f"❌ خطأ في الرد: {e}", exc_info=True)
 
 
 # ==================== الأزرار ====================
