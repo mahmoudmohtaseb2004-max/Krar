@@ -14,7 +14,7 @@ from telegram.ext import (
 
 # ==================== الإعدادات ====================
 BOT_TOKEN = "8770091738:AAFEcZuqJfs6jfloBq1y5lwZgNaRnwi11Fg"
-ADMIN_GROUP_ID = -1003771199618
+ADMIN_GROUP_ID = -5270584885
 
 REDIS_HOST = "redis-18716.c244.us-east-1-2.ec2.cloud.redislabs.com"
 REDIS_PORT = 18716
@@ -58,6 +58,14 @@ def set_broadcast_mode(admin_id, value):
     else: r.delete(f"{REDIS_PREFIX}:broadcast:{admin_id}")
 def is_broadcast_mode(admin_id): return r.exists(f"{REDIS_PREFIX}:broadcast:{admin_id}") == 1
 
+def is_first_message(user_id: int) -> bool:
+    """هل هذي أول رسالة للمستخدم؟"""
+    return not r.sismember(f"{REDIS_PREFIX}:messaged", str(user_id))
+
+def mark_messaged(user_id: int):
+    """سجّل إن المستخدم بعث رسالة من قبل"""
+    r.sadd(f"{REDIS_PREFIX}:messaged", user_id)
+
 
 # ==================== مساعد ====================
 
@@ -84,47 +92,11 @@ def get_message_type(message):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    chat = update.effective_chat
-
-    # تشخيص: أرسل معلومات المحادثة
-    debug_info = (
-        f"🔍 *معلومات تشخيصية:*\n"
-        f"Chat ID: `{chat.id}`\n"
-        f"Chat Type: `{chat.type}`\n"
-        f"User ID: `{user.id}`\n"
-        f"Admin Group ID المضبوط: `{ADMIN_GROUP_ID}`"
-    )
-    logger.info(f"START - Chat ID: {chat.id}, User ID: {user.id}")
-
     if is_banned(user.id):
         await update.message.reply_text("⛔ أنت محظور من التواصل مع الإدارة.")
         return
-
     save_user(user.id)
-    await update.message.reply_text(
-        f"أهلاً {user.first_name}! 👋\n\n"
-        "يمكنك إرسال أي رسالة وسيتم تحويلها إلى فريق الإدارة.\n"
-        "سنرد عليك في أقرب وقت ممكن. 💬\n\n"
-        + debug_info,
-        parse_mode="Markdown"
-    )
-
-
-# ==================== أمر تشخيص ====================
-
-async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    user = update.effective_user
-    await update.message.reply_text(
-        f"🔍 *تشخيص:*\n"
-        f"Chat ID: `{chat.id}`\n"
-        f"Chat Type: `{chat.type}`\n"
-        f"Chat Title: `{chat.title}`\n"
-        f"User ID: `{user.id}`\n"
-        f"Admin Group ID: `{ADMIN_GROUP_ID}`\n"
-        f"هل هذه المجموعة هي مجموعة الأدمن؟ `{chat.id == ADMIN_GROUP_ID}`",
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text(f"أهلاً {user.first_name}! 👋")
 
 
 # ==================== رسائل المستخدمين ====================
@@ -134,10 +106,7 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     message = update.message
     chat = update.effective_chat
 
-    logger.info(f"رسالة واردة - Chat ID: {chat.id}, User ID: {user.id}, Type: {chat.type}")
-
     if chat.id == ADMIN_GROUP_ID:
-        logger.info("الرسالة من مجموعة الأدمن - تجاهل")
         return
 
     if is_banned(user.id):
@@ -145,36 +114,32 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     save_user(user.id)
-
-    header = (
-        f"📩 *رسالة جديدة* | {get_message_type(message)}\n"
-        f"👤 {get_user_display(user)}\n"
-        f"🆔 `{user.id}`\n"
-        f"{'—' * 22}"
-    )
+    first_time = is_first_message(user.id)
 
     try:
-        logger.info(f"محاولة إرسال للمجموعة: {ADMIN_GROUP_ID}")
-        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=header, parse_mode="Markdown")
+        # forward الرسالة للجروب مباشرة بدون هيدر
         forwarded = await message.forward(chat_id=ADMIN_GROUP_ID)
         save_message_map(forwarded.message_id, user.id)
 
+        # أزرار الحظر والبث
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("📢 بث للجميع", callback_data=f"broadcast:{user.id}")],
-            [InlineKeyboardButton("🚫 حظر هذا المستخدم", callback_data=f"ban:{user.id}")]
+            [InlineKeyboardButton("🚫 حظر", callback_data=f"ban:{user.id}")]
         ])
-
         await context.bot.send_message(
             chat_id=ADMIN_GROUP_ID,
-            text="⬆️ *ردّ مباشرة* على الرسالة المُحالة أعلاه للرد على المستخدم.",
+            text=f"👤 {get_user_display(user)} | 🆔 `{user.id}`",
             parse_mode="Markdown",
             reply_markup=keyboard
         )
-        logger.info("✅ تم إرسال الرسالة للمجموعة بنجاح")
-        await message.reply_text("✅ تم إرسال رسالتك للإدارة، سنرد عليك قريباً!")
+
+        # رد على المستخدم فقط بأول رسالة
+        if first_time:
+            await message.reply_text("✅ سنرد عليك في أقرب وقت ممكن.")
+            mark_messaged(user.id)
 
     except Exception as e:
-        logger.error(f"❌ خطأ في الإرسال للمجموعة: {e}", exc_info=True)
+        logger.error(f"❌ خطأ: {e}", exc_info=True)
         await message.reply_text(f"❌ خطأ: {e}")
 
 
@@ -215,7 +180,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📢 بث للجميع", callback_data=f"broadcast:{user_id}")],
             [InlineKeyboardButton("✅ فك الحظر", callback_data=f"unban:{user_id}")]
         ]))
-        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=f"🚫 تم حظر المستخدم `{user_id}`.", parse_mode="Markdown")
+        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=f"🚫 تم حظر `{user_id}`.", parse_mode="Markdown")
         try: await context.bot.send_message(chat_id=user_id, text="⛔ تم حظرك من التواصل مع الإدارة.")
         except: pass
 
@@ -224,9 +189,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         unban_user(user_id)
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📢 بث للجميع", callback_data=f"broadcast:{user_id}")],
-            [InlineKeyboardButton("🚫 حظر هذا المستخدم", callback_data=f"ban:{user_id}")]
+            [InlineKeyboardButton("🚫 حظر", callback_data=f"ban:{user_id}")]
         ]))
-        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=f"✅ تم فك حظر المستخدم `{user_id}`.", parse_mode="Markdown")
+        await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=f"✅ تم فك حظر `{user_id}`.", parse_mode="Markdown")
         try: await context.bot.send_message(chat_id=user_id, text="✅ تم فك حظرك، يمكنك التواصل مجدداً.")
         except: pass
 
@@ -322,7 +287,7 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_GROUP_ID: return
     await update.message.reply_text(
-        f"📊 *إحصائيات البوت الأول:*\n\n"
+        f"📊 *إحصائيات البوت:*\n\n"
         f"👥 المستخدمين: {get_users_count()}\n"
         f"📨 الرسائل: {get_messages_count()}\n"
         f"🚫 المحظورين: {r.scard(f'{REDIS_PREFIX}:banned')}",
@@ -353,7 +318,6 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("debug", debug))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
     app.add_handler(CommandHandler("ban", ban_command))
     app.add_handler(CommandHandler("unban", unban_command))
@@ -362,7 +326,7 @@ def main():
     app.add_handler(MessageHandler(filters.Chat(ADMIN_GROUP_ID) & ALL_MESSAGES, handle_admin_message))
     app.add_handler(MessageHandler(~filters.Chat(ADMIN_GROUP_ID) & ALL_MESSAGES, handle_user_message))
 
-    logger.info("✅ البوت الأول يعمل...")
+    logger.info("✅ البوت يعمل...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
