@@ -14,7 +14,7 @@ from telegram.ext import (
 
 # ==================== الإعدادات ====================
 BOT_TOKEN = "8770091738:AAFEcZuqJfs6jfloBq1y5lwZgNaRnwi11Fg"
-ADMIN_GROUP_ID = -5270584885
+ADMIN_GROUP_ID = -1003771199618
 
 REDIS_HOST = "redis-18716.c244.us-east-1-2.ec2.cloud.redislabs.com"
 REDIS_PORT = 18716
