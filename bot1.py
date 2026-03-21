@@ -14,7 +14,7 @@ from telegram.ext import (
 
 # ==================== الإعدادات ====================
 BOT_TOKEN = "8770091738:AAFEcZuqJfs6jfloBq1y5lwZgNaRnwi11Fg"
-ADMIN_GROUP_ID = -5270584885
+ADMIN_GROUP_ID = -1005270584885
 
 REDIS_HOST = "redis-18716.c244.us-east-1-2.ec2.cloud.redislabs.com"
 REDIS_PORT = 18716
@@ -27,7 +27,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 
-# ==================== Web Server عشان Render ما ينام ====================
+# ==================== Web Server ====================
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -35,7 +35,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot is running!")
     def log_message(self, format, *args):
-        pass  # تعطيل logs الـ server
+        pass
 
 def run_server():
     server = HTTPServer(("0.0.0.0", 8080), HealthHandler)
@@ -84,14 +84,46 @@ def get_message_type(message):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    chat = update.effective_chat
+
+    # تشخيص: أرسل معلومات المحادثة
+    debug_info = (
+        f"🔍 *معلومات تشخيصية:*\n"
+        f"Chat ID: `{chat.id}`\n"
+        f"Chat Type: `{chat.type}`\n"
+        f"User ID: `{user.id}`\n"
+        f"Admin Group ID المضبوط: `{ADMIN_GROUP_ID}`"
+    )
+    logger.info(f"START - Chat ID: {chat.id}, User ID: {user.id}")
+
     if is_banned(user.id):
         await update.message.reply_text("⛔ أنت محظور من التواصل مع الإدارة.")
         return
+
     save_user(user.id)
     await update.message.reply_text(
         f"أهلاً {user.first_name}! 👋\n\n"
         "يمكنك إرسال أي رسالة وسيتم تحويلها إلى فريق الإدارة.\n"
-        "سنرد عليك في أقرب وقت ممكن. 💬"
+        "سنرد عليك في أقرب وقت ممكن. 💬\n\n"
+        + debug_info,
+        parse_mode="Markdown"
+    )
+
+
+# ==================== أمر تشخيص ====================
+
+async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    await update.message.reply_text(
+        f"🔍 *تشخيص:*\n"
+        f"Chat ID: `{chat.id}`\n"
+        f"Chat Type: `{chat.type}`\n"
+        f"Chat Title: `{chat.title}`\n"
+        f"User ID: `{user.id}`\n"
+        f"Admin Group ID: `{ADMIN_GROUP_ID}`\n"
+        f"هل هذه المجموعة هي مجموعة الأدمن؟ `{chat.id == ADMIN_GROUP_ID}`",
+        parse_mode="Markdown"
     )
 
 
@@ -100,9 +132,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message = update.message
+    chat = update.effective_chat
 
-    if update.effective_chat.id == ADMIN_GROUP_ID:
+    logger.info(f"رسالة واردة - Chat ID: {chat.id}, User ID: {user.id}, Type: {chat.type}")
+
+    if chat.id == ADMIN_GROUP_ID:
+        logger.info("الرسالة من مجموعة الأدمن - تجاهل")
         return
+
     if is_banned(user.id):
         await message.reply_text("⛔ أنت محظور من التواصل مع الإدارة.")
         return
@@ -117,6 +154,7 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
     try:
+        logger.info(f"محاولة إرسال للمجموعة: {ADMIN_GROUP_ID}")
         await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=header, parse_mode="Markdown")
         forwarded = await message.forward(chat_id=ADMIN_GROUP_ID)
         save_message_map(forwarded.message_id, user.id)
@@ -132,11 +170,12 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode="Markdown",
             reply_markup=keyboard
         )
+        logger.info("✅ تم إرسال الرسالة للمجموعة بنجاح")
         await message.reply_text("✅ تم إرسال رسالتك للإدارة، سنرد عليك قريباً!")
 
     except Exception as e:
-        logger.error(f"خطأ: {e}")
-        await message.reply_text("❌ حدث خطأ، يرجى المحاولة لاحقاً.")
+        logger.error(f"❌ خطأ في الإرسال للمجموعة: {e}", exc_info=True)
+        await message.reply_text(f"❌ خطأ: {e}")
 
 
 # ==================== ردود المشرفين ====================
@@ -308,13 +347,13 @@ def main():
         logger.error(f"❌ فشل الاتصال بـ Redis: {e}")
         return
 
-    # تشغيل web server في background عشان Render ما ينام
     thread = threading.Thread(target=run_server, daemon=True)
     thread.start()
     logger.info("✅ Web server شغال على port 8080")
 
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("debug", debug))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
     app.add_handler(CommandHandler("ban", ban_command))
     app.add_handler(CommandHandler("unban", unban_command))
