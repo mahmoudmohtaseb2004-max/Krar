@@ -1,5 +1,7 @@
 import logging
 import redis
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -23,6 +25,21 @@ r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decod
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# ==================== Web Server عشان Render ما ينام ====================
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+    def log_message(self, format, *args):
+        pass  # تعطيل logs الـ server
+
+def run_server():
+    server = HTTPServer(("0.0.0.0", 8080), HealthHandler)
+    server.serve_forever()
 
 
 # ==================== دوال Redis ====================
@@ -291,6 +308,11 @@ def main():
         logger.error(f"❌ فشل الاتصال بـ Redis: {e}")
         return
 
+    # تشغيل web server في background عشان Render ما ينام
+    thread = threading.Thread(target=run_server, daemon=True)
+    thread.start()
+    logger.info("✅ Web server شغال على port 8080")
+
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
@@ -306,4 +328,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
