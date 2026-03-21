@@ -170,14 +170,13 @@ async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_T
         # حفظ العلاقة بين رسالة الجروب والمستخدم
         save_message_map(sent.message_id, user_id)
 
-        # أزرار الحظر والبث
+        # أزرار الحظر والبث فقط بدون رسالة إضافية
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📢 بث للجميع", callback_data=f"broadcast:{user_id}")],
             [InlineKeyboardButton("🚫 حظر", callback_data=f"ban:{user_id}")]
         ])
         await context.bot.send_message(
             chat_id=ADMIN_GROUP_ID,
-            text=f"🆔 `{user_id}` | 🕒 {now}",
+            text=f"👤 {sender_name} | 🆔 `{user_id}`",
             parse_mode="Markdown",
             reply_markup=keyboard
         )
@@ -362,11 +361,10 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ لا يوجد مستخدمين للبث")
         return
 
-    # تحديد الرسالة المراد بثها
-    replied = update.message.reply_to_message
     broadcast_text = " ".join(context.args) if context.args else None
+    replied = update.message.reply_to_message
 
-    if not replied and not broadcast_text:
+    if not broadcast_text and not replied:
         await update.message.reply_text("❌ استخدم:\n/bd نص الرسالة\nأو رد على رسالة بـ /bd")
         return
 
@@ -384,10 +382,14 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_video(chat_id=int(uid), video=replied.video.file_id, caption=replied.caption)
                 elif replied.voice:
                     await context.bot.send_voice(chat_id=int(uid), voice=replied.voice.file_id)
+                elif replied.audio:
+                    await context.bot.send_audio(chat_id=int(uid), audio=replied.audio.file_id, caption=replied.caption)
                 elif replied.document:
                     await context.bot.send_document(chat_id=int(uid), document=replied.document.file_id, caption=replied.caption)
                 elif replied.sticker:
                     await context.bot.send_sticker(chat_id=int(uid), sticker=replied.sticker.file_id)
+                elif replied.animation:
+                    await context.bot.send_animation(chat_id=int(uid), animation=replied.animation.file_id, caption=replied.caption)
                 else:
                     await context.bot.send_message(chat_id=int(uid), text=broadcast_text or "")
             else:
