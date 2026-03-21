@@ -1,0 +1,11 @@
+app = "krar"
+primary_region = "ams"
+
+[build]
+
+[processes]
+  worker = "python bot1.py"
+
+[[services]]
+  internal_port = 8443
+  protocol = "tcp"
