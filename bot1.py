@@ -111,66 +111,13 @@ async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_T
     msg = update.message
 
     try:
-        # إرسال الرسالة لجروب الأدمن حسب النوع
-        if msg.text:
-            sent = await context.bot.send_message(
-                chat_id=ADMIN_GROUP_ID,
-                text=f"{sender_name}\n{msg.text}"
-            )
-        elif msg.photo:
-            sent = await context.bot.send_photo(
-                chat_id=ADMIN_GROUP_ID,
-                photo=msg.photo[-1].file_id,
-                caption=f"{sender_name}\n{msg.caption or ''}"
-            )
-        elif msg.voice:
-            sent = await context.bot.send_voice(
-                chat_id=ADMIN_GROUP_ID,
-                voice=msg.voice.file_id,
-                caption=sender_name
-            )
-        elif msg.video:
-            sent = await context.bot.send_video(
-                chat_id=ADMIN_GROUP_ID,
-                video=msg.video.file_id,
-                caption=f"{sender_name}\n{msg.caption or ''}"
-            )
-        elif msg.audio:
-            sent = await context.bot.send_audio(
-                chat_id=ADMIN_GROUP_ID,
-                audio=msg.audio.file_id,
-                caption=f"{sender_name}\n{msg.caption or ''}"
-            )
-        elif msg.document:
-            sent = await context.bot.send_document(
-                chat_id=ADMIN_GROUP_ID,
-                document=msg.document.file_id,
-                caption=f"{sender_name}\n{msg.caption or ''}"
-            )
-        elif msg.sticker:
-            sent = await context.bot.send_sticker(
-                chat_id=ADMIN_GROUP_ID,
-                sticker=msg.sticker.file_id
-            )
-        elif msg.video_note:
-            sent = await context.bot.send_video_note(
-                chat_id=ADMIN_GROUP_ID,
-                video_note=msg.video_note.file_id
-            )
-        elif msg.location:
-            sent = await context.bot.send_location(
-                chat_id=ADMIN_GROUP_ID,
-                latitude=msg.location.latitude,
-                longitude=msg.location.longitude
-            )
-        else:
-            await update.message.reply_text("❌ نوع الرسالة غير مدعوم.")
-            return
+        # تحويل الرسالة مباشرة للجروب
+        sent = await msg.forward(chat_id=ADMIN_GROUP_ID)
 
         # حفظ العلاقة بين رسالة الجروب والمستخدم
         save_message_map(sent.message_id, user_id)
 
-        # الأزرار مباشرة على الرسالة بدون رسالة إضافية
+        # الأزرار مباشرة على الرسالة المحولة
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("📢 بث للجميع", callback_data=f"broadcast:{user_id}")],
             [InlineKeyboardButton("🚫 حظر", callback_data=f"ban:{user_id}")]
@@ -182,9 +129,10 @@ async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_T
                 reply_markup=keyboard
             )
         except:
+            # ستيكر وفيديو دائري ما يقبل تعديل، نبعت رسالة صغيرة بالأزرار فقط
             await context.bot.send_message(
                 chat_id=ADMIN_GROUP_ID,
-                text=f"👆 {sender_name}",
+                text="👆",
                 reply_markup=keyboard
             )
 
