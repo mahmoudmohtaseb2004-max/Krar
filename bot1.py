@@ -53,7 +53,7 @@ def get_users_count(): return r.scard(f"{REDIS_PREFIX}:users")
 def get_messages_count(): return len(r.keys(f"{REDIS_PREFIX}:msg:*"))
 
 def save_message_map(group_msg_id, user_id):
-    r.set(f"{REDIS_PREFIX}:msg:{group_msg_id}", user_id)
+    r.set(f"{REDIS_PREFIX}:msg:{group_msg_id}", user_id, ex=18000)  # تنمسح بعد 5 ساعات
 
 def get_user_from_message(group_msg_id):
     return r.get(f"{REDIS_PREFIX}:msg:{group_msg_id}")
