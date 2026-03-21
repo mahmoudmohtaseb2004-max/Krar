@@ -14,10 +14,9 @@ from telegram.ext import (
 BOT_TOKEN = "8770091738:AAFEcZuqJfs6jfloBq1y5lwZgNaRnwi11Fg"
 ADMIN_GROUP_ID = -5270584885
 
-# إعدادات Redis Cloud
-REDIS_HOST = "your-redis-host.redis.cloud"  # ← غيّر هذا
-REDIS_PORT = 12345                           # ← غيّر هذا
-REDIS_PASSWORD = "your-redis-password"       # ← غيّر هذا
+REDIS_HOST = "redis-18716.c244.us-east-1-2.ec2.cloud.redislabs.com"
+REDIS_PORT = 18716
+REDIS_PASSWORD = "fKKKwO2rExeB4jWXNMxCEVcXibRdbXiz"
 REDIS_PREFIX = "bot1"
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
@@ -307,3 +306,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
