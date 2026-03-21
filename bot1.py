@@ -170,16 +170,23 @@ async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_T
         # حفظ العلاقة بين رسالة الجروب والمستخدم
         save_message_map(sent.message_id, user_id)
 
-        # أزرار الحظر والبث فقط بدون رسالة إضافية
+        # الأزرار مباشرة على الرسالة بدون رسالة إضافية
         keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📢 بث للجميع", callback_data=f"broadcast:{user_id}")],
             [InlineKeyboardButton("🚫 حظر", callback_data=f"ban:{user_id}")]
         ])
-        await context.bot.send_message(
-            chat_id=ADMIN_GROUP_ID,
-            text=f"👤 {sender_name} | 🆔 `{user_id}`",
-            parse_mode="Markdown",
-            reply_markup=keyboard
-        )
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=ADMIN_GROUP_ID,
+                message_id=sent.message_id,
+                reply_markup=keyboard
+            )
+        except:
+            await context.bot.send_message(
+                chat_id=ADMIN_GROUP_ID,
+                text=f"👆 {sender_name}",
+                reply_markup=keyboard
+            )
 
         # رد على المستخدم فقط بأول رسالة
         if first_time:
