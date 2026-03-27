@@ -2,8 +2,6 @@ import logging
 import redis
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from datetime import datetime
-import pytz
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -115,20 +113,17 @@ async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_T
     msg = update.message
 
     try:
-        # الرسالة الأولى (فقط اليوزر)
         await context.bot.send_message(
             chat_id=ADMIN_GROUP_ID,
             text=f"👤 مستخدم: {sender_name}"
         )
 
-        # الرسالة الثانية (نسخة بدون يوزر)
         sent = await context.bot.copy_message(
             chat_id=ADMIN_GROUP_ID,
             from_chat_id=msg.chat_id,
             message_id=msg.message_id
         )
 
-        # ربط الرد
         save_message_map(sent.message_id, user_id)
 
         if first_time:
@@ -180,7 +175,58 @@ async def handle_group_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception as e:
         logger.error(f"❌ خطأ: {e}", exc_info=True)
 
-# ==================== أوامر ====================
+# ==================== /bd (احترافي) ====================
+async def bd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ADMIN_GROUP_ID:
+        return
+
+    users = get_all_users()
+
+    # بدون رد → نص
+    if not update.message.reply_to_message:
+        if not context.args:
+            await update.message.reply_text("❌ اكتب رسالة أو اعمل رد على رسالة")
+            return
+
+        message = " ".join(context.args)
+
+        sent = 0
+        failed = 0
+
+        for user_id in users:
+            try:
+                await context.bot.send_message(chat_id=int(user_id), text=message)
+                sent += 1
+            except:
+                failed += 1
+
+        await update.message.reply_text(
+            f"✅ تم الإرسال لـ {sent}\n❌ فشل لـ {failed}"
+        )
+        return
+
+    # مع رد → ينسخ أي نوع رسالة
+    reply_msg = update.message.reply_to_message
+
+    sent = 0
+    failed = 0
+
+    for user_id in users:
+        try:
+            await context.bot.copy_message(
+                chat_id=int(user_id),
+                from_chat_id=update.effective_chat.id,
+                message_id=reply_msg.message_id
+            )
+            sent += 1
+        except:
+            failed += 1
+
+    await update.message.reply_text(
+        f"✅ تم إرسال الرسالة للجميع\n📤 نجح: {sent}\n❌ فشل: {failed}"
+    )
+
+# ==================== /stats ====================
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ADMIN_GROUP_ID:
         return
@@ -211,6 +257,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("bd", bd))
 
     app.add_handler(MessageHandler(
         filters.Chat(ADMIN_GROUP_ID) & ALL_MESSAGES,
